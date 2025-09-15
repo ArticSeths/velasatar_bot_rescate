@@ -10,7 +10,7 @@
 // Requisitos:
 //   npm init -y
 //   npm install discord.js dotenv
-//   Node.js LTS (22+)
+//   Node.js LTS (18+)
 // ------------------------------------------------------------
 
 import { Client, GatewayIntentBits, Partials, Routes, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
@@ -55,7 +55,7 @@ const commands = [
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`Bot conectado como ${client.user.tag}`);
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
