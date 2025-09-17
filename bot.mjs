@@ -5,6 +5,7 @@
 // - Publica un embed en el canal de rescate, mencionando al rol @medico.
 // - Crea un hilo automáticamente para la coordinación.
 // - Botones: "Tomar caso", "Exitoso", "Fallido".
+// - Múltiples rescatistas pueden tomar el mismo caso.
 // - Solo quien tomó el caso (o moderadores) puede cerrarlo.
 //
 // Requisitos:
@@ -118,7 +119,7 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       const thread = await message.startThread({ name: `Rescate #${message.id} — ${interaction.user.username}`, autoArchiveDuration: 60 });
-      cases.set(message.id, { requester: interaction.user.id, threadId: thread.id, claimer: null, status: 'PENDIENTE' });
+      cases.set(message.id, { requester: interaction.user.id, threadId: thread.id, claimers: [], status: 'PENDIENTE' });
 
       await interaction.reply({ content: `Tu solicitud ha sido publicada en ${channel}.`, ephemeral: true });
     }
@@ -128,23 +129,34 @@ client.on('interactionCreate', async (interaction) => {
     if (!state) return interaction.reply({ content: "No se encontró el caso.", ephemeral: true });
 
     if (interaction.customId === 'take_case') {
-      if (state.claimer && state.claimer !== interaction.user.id) {
-        return interaction.reply({ content: "El caso ya fue tomado por otro rescatista.", ephemeral: true });
+      if (state.claimers.includes(interaction.user.id)) {
+        return interaction.reply({ content: "Ya has tomado este caso.", ephemeral: true });
       }
-      state.claimer = interaction.user.id;
+      
+      state.claimers.push(interaction.user.id);
       state.status = 'EN_CAMINO';
-      const embed = EmbedBuilder.from(message.embeds[0]).setTitle('🚑 Rescatista en camino').setColor('Orange');
+      
+      // Actualizar embed con la lista de rescatistas
+      const claimersList = state.claimers.map(id => `<@${id}>`).join(', ');
+      const embed = EmbedBuilder.from(message.embeds[0])
+        .setTitle('🚑 Rescatistas en camino')
+        .setColor('Orange')
+        .setFields(
+          message.embeds[0].fields.slice(0, 5), // Mantener los campos originales
+          { name: '🚑 Rescatistas', value: claimersList, inline: false }
+        );
+      
       await message.edit({ embeds: [embed], components: message.components });
       const thread = await client.channels.fetch(state.threadId);
-      await thread.send(`🚑 ${interaction.user} ha tomado el caso.`);
-      return interaction.reply({ content: "Has tomado el caso.", ephemeral: true });
+      await thread.send(`🚑 ${interaction.user} se ha unido al rescate. Total de rescatistas: ${state.claimers.length}`);
+      return interaction.reply({ content: "Te has unido al caso de rescate.", ephemeral: true });
     }
 
     if (interaction.customId === 'mark_success' || interaction.customId === 'mark_failed') {
-      if (!state.claimer) {
+      if (state.claimers.length === 0) {
         return interaction.reply({ content: "Nadie ha tomado el caso aún.", ephemeral: true });
       }
-      if (interaction.user.id !== state.claimer && !interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      if (!state.claimers.includes(interaction.user.id) && !interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
         return interaction.reply({ content: "Solo quien tomó el caso (o un moderador) puede cerrarlo.", ephemeral: true });
       }
 
